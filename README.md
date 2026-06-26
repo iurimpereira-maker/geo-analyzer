@@ -5,14 +5,17 @@ Reúne, num só mapa, dados de **geolocalização**, **telefonia (ERBs)**, **pas
 (câmeras de leitura de placa — OCR/LPR) e **IPs de aplicação**, com **camadas de referência** e
 **análise automática** (itinerário, base provável, handover terrestre/aéreo, lacunas e ranking).
 
-Roda **100% no navegador** (Chrome ou Edge), **sem servidor e sem instalação**: é só abrir o
-arquivo `geo-analyzer.html`. Nenhum dado carregado é enviado para fora — a internet é usada
-apenas para os *tiles* do mapa, cálculo de rota (OSRM) e, **sob clique do usuário**, geolocalização
-de IP em fontes abertas.
+### ▶ Abrir agora (sem instalar)
+
+**https://iurimpereira-maker.github.io/geo-analyzer/**
+
+Roda **100% no navegador** (Chrome ou Edge), **sem servidor e sem instalação**. Nenhum dado
+carregado é enviado para fora — a internet é usada apenas para os *tiles* do mapa, cálculo de rota
+(OSRM) e, **sob clique do usuário**, geolocalização de IP em fontes abertas.
 
 ## Como usar
 
-1. Abra **`geo-analyzer.html`** no **Google Chrome** ou **Microsoft Edge**.
+1. Abra o **link acima** (ou baixe o arquivo `index.html` e abra no **Chrome / Edge**).
 2. Arraste seus arquivos (XLSX / CSV / PDF / ZIP) para a coluna esquerda — o tipo é
    **detectado automaticamente** (geolocalização, telefonia, placas, IPs…).
 
