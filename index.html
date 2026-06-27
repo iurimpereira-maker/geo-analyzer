@@ -1051,7 +1051,7 @@
     <ul>
       <li><b>Postos PRF</b> — unidades operacionais para planejar abordagem; nem todo posto tem câmera OCR.</li>
       <li><b>Pedágios</b> — praças/cancelas; dá para oficiar a concessionária pedindo passagens por período.</li>
-      <!-- camada de câmeras OCR (OCR/LPR) removida no distribuível -->
+      <!-- camada de câmeras OCR (OCR/LPR/EXTCAM) removida no distribuível -->
       <li><b>Presídios</b>, <b>Portos</b>, <b>Aeroportos e pistas clandestinas</b> — contexto para os deslocamentos do alvo.</li>
       <li><b>ERBs Brasil</b> (~110 mil antenas) — carregada do arquivo <i>ERBs&nbsp;Mar26.xlsx</i>; localiza a antena de um CGI.</li>
     </ul>
@@ -1596,8 +1596,9 @@
 
   <div class="footer">
     <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--pf-text-dim);margin-bottom:6px">Desenvolvido por</div>
-    <b>APF MENDES</b><br><span style="font-size:9px;color:var(--pf-text-dim);letter-spacing:.04em;display:block;margin-top:7px;line-height:1.55">&copy; 2026 Iuri Mendes &middot; Licen&ccedil;a <b style="color:var(--pf-gold)">n&atilde;o-comercial</b> (PolyForm) &middot; uso comercial requer autoriza&ccedil;&atilde;o</span>
-    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--pf-gold);letter-spacing:.1em"></span>
+    <b>APF MENDES</b><br>
+    
+    <div style="font-size:9px;color:var(--pf-text-dim);letter-spacing:.04em;margin-top:8px;line-height:1.55">&copy; 2026 Iuri Mendes &middot; Licen&ccedil;a <b style="color:var(--pf-gold)">n&atilde;o-comercial</b> (PolyForm) &middot; uso comercial requer autoriza&ccedil;&atilde;o</div>
   </div>
 </div>
 
@@ -1955,7 +1956,7 @@ setTimeout(()=>{
 }, 100);
 
 // ============ CÂMERAS EXTCAM (LPR/ANPR) — camada externa com clustering ============
-// Espelha a camada do OCR/LPR, mas é a base do EXTCAM.
+// Espelha a camada do OCR/LPR (PRF), mas é a base do EXTCAM.
 // Pontos {lat,lng,uf,acr,eq,st}; UF derivada do prefixo de acronymEquipmentCode.
 // Em DEV fica reduzida a SC; o build final injeta o Brasil inteiro. Também é base de
 // "ponto fixo" do Handover terrestre / rota provável (igual ao OCR/LPR).
@@ -3836,7 +3837,7 @@ function applyAll(){
   if(T('t-antenas')){ lyrAntenas.addTo(map); } else { map.removeLayer(lyrAntenas); }
   if(T('t-pontos')){ lyrPontos.addTo(map); } else { map.removeLayer(lyrPontos); }
   if(T('t-extratos')){ lyrExtratos.addTo(map); } else { map.removeLayer(lyrExtratos); }
-  // Passagens de veículos (OCR/LPR): respeitam o filtro GLOBAL de data, igual ao resto.
+  // Passagens de veículos (OCR/LPR/EXTCAM): respeitam o filtro GLOBAL de data, igual ao resto.
   if(typeof ALERTA_PASSAGES!=='undefined' && ALERTA_PASSAGES.length && typeof _abBuildMarkers==='function'){ const _sh=document.getElementById('vp-show'); if(!_sh || _sh.checked) _abBuildMarkers(); }
   // IPs de aplicação (🌐): re-desenha a camada (caixinhas do Itinerário podem ter ocultado IPs).
   if(typeof IP_SOURCES!=='undefined' && IP_SOURCES.length && typeof _ipLayerRefresh==='function' && typeof _ipAggs==='function'){ try{ const _ipa=_ipAggs(); const _ipp=_ipLayerRefresh(_ipa); if(typeof _ipRenderPanel==='function') _ipRenderPanel(_ipa,_ipp); }catch(e){} }   // _ipAggs respeita o filtro global de data → painel acompanha
@@ -4269,7 +4270,7 @@ function _buildAnaliseFontes(){
     }
   }
   // Reordenação dos filhos (pedido do usuário): "ERBs/GEOs mais acionadas" sobe p/ ACIMA do
-  // Itinerário; "Handover aéreo" desce p/ ABAIXO de "Veículos · OCR/LPR". Feito no
+  // Itinerário; "Handover aéreo" desce p/ ABAIXO de "Veículos · OCR/LPR/EXTCAM". Feito no
   // DOM por ID (não recorta os blocos grandes) — a ordem-fonte do HTML permanece como está.
   try{
     const aSec = parent && parent.querySelector(':scope > .sec');
@@ -4642,7 +4643,8 @@ function _cityTrips(segs){
   if(!segs || segs.length<2) return null;
   const cities=_cityAggregate(segs);
   if(cities.length<2) return null;
-  const base=cities.slice().sort((a,b)=>(b.points-a.points)||(b.nDays-a.nDays))[0];   // base = mais pontos (desempate por dias)
+  const autoBase=cities.slice().sort((a,b)=>(b.points-a.points)||(b.nDays-a.nDays))[0];   // base AUTOMÁTICA = mais pontos (desempate por dias)
+  const base=(_cidBaseOverride ? cities.find(c=>c.key===_cidBaseOverride) : null) || autoBase;   // override MANUAL da cidade-base, se a escolhida existir no filtro atual
   const distOf={}; cities.forEach(c=>{ distOf[c.key]=_tlKm(base.lat,base.lng,c.lat,c.lng); });
   const open=[]; let cur=null, lastBaseEnd=null;
   for(let i=0;i<segs.length;i++){
@@ -4666,7 +4668,7 @@ function _cityTrips(segs){
       firstIdx:t.firstIdx, lastIdx:t.lastIdx };
   });
   trips.sort((a,b)=>(+a.departure)-(+b.departure));
-  return { base, trips };
+  return { base, autoBase, cities, trips };
 }
 function _cityTripFocus(trip, mode){
   _cityEnsureLayer(); _cityClear();
@@ -4686,6 +4688,7 @@ function _cityTripFocus(trip, mode){
 const CITY_TRIP_COLORS = ['#EF4444','#3B82F6','#22C55E','#F59E0B','#A855F7','#EC4899','#14B8A6','#F97316'];
 let _cityIsolatedTi = null;       // índice da viagem isolada (filtro de intervalo aplicado) ou null
 let _cityIsolatedMode = 'full';   // 'full' (ida-e-volta) | 'ida' | 'volta'
+let _cidBaseOverride = null;      // cidade-base escolhida MANUALMENTE (key) ou null = automática (mais acionamentos)
 // Isola um TRECHO da viagem aplicando o "Filtro por intervalo": full = [saída, retorno];
 // ida = [saída → fim da estada no ponto mais distante]; volta = [chegada no ponto mais
 // distante → retorno]. Mapa, Itinerário cronológico, Ranking e Handover passam a considerar
@@ -4754,7 +4757,13 @@ function _renderCidadesNow(){
     }).join('');
     tripHtml =
       '<div class="cid-trip" style="border:1px solid var(--pf-gold);border-radius:6px;padding:8px 10px;margin:0 0 8px;background:rgba(201,169,97,.07)">'+
-        '<div style="font-size:12px;line-height:1.5;margin-bottom:3px">📍 <b>Base provável:</b> '+htmlEsc(b.nome)+(b.uf?'/'+htmlEsc(b.uf):'')+' <span class="small" style="color:var(--pf-text-dim)">('+b.points+' pts &middot; '+b.nDays+' dias)</span></div>'+
+        '<div style="font-size:12px;line-height:1.6;margin-bottom:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">📍 <b>Base'+(_cidBaseOverride?'':' provável')+':</b>'+
+          '<select id="cid-base-sel" title="Cidade-base do alvo. Padrão: automática (a cidade com mais acionamentos ⭐). Se você SABE a base e ela leu errado, escolha a correta aqui — as viagens são recalculadas a partir dela." style="max-width:210px;font-size:11px;padding:2px 5px;background:var(--pf-card);color:var(--pf-text);border:1px solid var(--pf-border);border-radius:4px;cursor:pointer">'+
+            tinfo.cities.slice().sort((a,b)=>(b.points-a.points)||(b.nDays-a.nDays)).map(c=>'<option value="'+htmlEsc(c.key)+'"'+(c.key===b.key?' selected':'')+'>'+htmlEsc(c.nome)+(c.uf?'/'+htmlEsc(c.uf):'')+' ('+c.points+' pts'+(c.nDays>1?' · '+c.nDays+'d':'')+')'+(c.key===tinfo.autoBase.key?' ⭐':'')+'</option>').join('')+
+          '</select>'+
+          '<span class="small" style="color:var(--pf-text-dim)">'+(_cidBaseOverride?'manual':'auto ⭐')+'</span>'+
+          (_cidBaseOverride?'<button class="small-btn" id="cid-base-auto" title="Voltar para a base automática" style="padding:1px 6px">↺ auto</button>':'')+
+        '</div>'+
         '<div style="font-size:11px;color:var(--pf-gold);font-weight:600;margin-bottom:2px">🧭 '+tinfo.trips.length+' viagem(ns) ida-e-volta · <b>marque</b> uma p/ isolar no mapa/Handover <span class="help-tip" tabindex="0" aria-label="Ajuda">?<span class="help-content">Cada vez que o alvo <b>sai da base</b>, vai a uma ou mais cidades e <b>volta</b> conta como uma viagem (cada uma com sua cor/risco na tabela abaixo). Marque o <b>checkbox</b> de uma viagem para deixar só ela no mapa, no Itinerário cronológico e no <b>Handover terrestre</b> (aplica o filtro de intervalo na janela da viagem). Com a viagem marcada, use <b>↗ Só ida</b> / <b>↘ Só volta</b> para isolar apenas o trecho de ida (base→destino) ou de volta (destino→base). Desmarque para voltar a tudo.</span></span></div>'+
         rows+
         (_cityIsolatedTi!=null?'<div class="ho-bar" style="margin-top:6px"><button class="small-btn" id="cid-iso-clear" style="flex:1">↺ Mostrar todas as viagens</button></div>':'')+
@@ -4780,6 +4789,12 @@ function _renderCidadesNow(){
   segHost.querySelectorAll('.cid-trip-ho').forEach(btn=>{ btn.onclick=ev=>{ ev.stopPropagation(); ev.preventDefault(); const ti=+btn.dataset.ti; if(_cityIsolatedTi!==ti && tinfo&&tinfo.trips[ti]){ _cityIsolatedTi=ti; _cityIsolatedMode='full'; _cityIsolateTrip(tinfo.trips[ti],'full'); } if(typeof _cidGoHandover==='function') _cidGoHandover(); }; });
   const isoClr=document.getElementById('cid-iso-clear'); if(isoClr) isoClr.onclick=ev=>{ ev.stopPropagation(); _cityClearIsolate(); };
   const cpBtn=document.getElementById('cid-copy-itin'); if(cpBtn) cpBtn.onclick=ev=>{ ev.stopPropagation(); _cityCopyItinerary(segs, ev.currentTarget); };
+  // Seletor de cidade-base (manual). Escolher a base AUTOMÁTICA volta p/ modo auto. Trocar a base
+  // recalcula as viagens, então limpa qualquer viagem isolada antes de re-renderizar.
+  const baseSel=document.getElementById('cid-base-sel');
+  if(baseSel) baseSel.onchange=()=>{ const v=baseSel.value; _cidBaseOverride=(tinfo && v===tinfo.autoBase.key)?null:v; if(_cityIsolatedTi!=null) _cityClearIsolate(); renderCidades(); };
+  const baseAuto=document.getElementById('cid-base-auto');
+  if(baseAuto) baseAuto.onclick=ev=>{ ev.stopPropagation(); _cidBaseOverride=null; if(_cityIsolatedTi!=null) _cityClearIsolate(); renderCidades(); };
   // [desativado] "Cruzamentos sugeridos" — UI removida a pedido (por enquanto). As funções
   // _citySuggestions / _renderCidSug / _citySugFocus / _cityCopyConditions ficam dormentes
   // (sem efeito sem o bloco #cidades-sug). Para reativar, recriar a UI e chamar _renderCidSug() aqui.
@@ -4833,7 +4848,7 @@ function _cityCopyItinerary(segs, btn){
   const L2=['ITINERÁRIO POR CIDADE (estadas em ordem cronológica)',''];
   const tinfo=_cityTrips(segs);
   if(tinfo){
-    L2.push('Base provável: '+tinfo.base.nome+(tinfo.base.uf?'/'+tinfo.base.uf:'')+' ('+tinfo.base.points+' pontos, '+tinfo.base.nDays+' dias).');
+    L2.push((_cidBaseOverride?'Base (escolhida manualmente): ':'Base provável: ')+tinfo.base.nome+(tinfo.base.uf?'/'+tinfo.base.uf:'')+' ('+tinfo.base.points+' pontos, '+tinfo.base.nDays+' dias).');
     if(tinfo.trips.length){
       L2.push('Viagens ida-e-volta detectadas: '+tinfo.trips.length);
       tinfo.trips.forEach((t,i)=>{ L2.push('  '+(i+1)+'. '+t.far.nome+(t.far.uf?'/'+t.far.uf:'')+' (~'+Math.round(t.farKm)+' km) — saída '+_cityFmtD(t.departure)+(t.returned?(', retorno '+_cityFmtD(t.back)+' ('+_cityDur(t.awayMs)+' fora)'):' (sem retorno nos dados)')); });
@@ -6637,7 +6652,7 @@ function globalTimeSpan(){
   let min=Infinity, max=-Infinity;
   (typeof DATASETS!=='undefined'?DATASETS:[]).forEach(d=>{ if(d.visible) d.points.forEach(p=>{ if(p.when){ const t=+p.when; if(t<min)min=t; if(t>max)max=t; } }); });
   (typeof EXTRATOS!=='undefined'?EXTRATOS:[]).forEach(x=>{ if(x.visible) x.erbs.forEach(e=>erbVisibleTimes(e).forEach(u=>{ const t=+u; if(t<min)min=t; if(t>max)max=t; })); });
-  // Passagens de veículo (OCR/LPR) entram na linha do tempo → o slider de intervalo
+  // Passagens de veículo (OCR/LPR/EXTCAM) entram na linha do tempo → o slider de intervalo
   // passa a funcionar mesmo quando só há passagens carregadas (sem dataset/extrato).
   (typeof ALERTA_PASSAGES!=='undefined'?ALERTA_PASSAGES:[]).forEach(p=>{ if(p.when && (typeof _vpSrcConsidered!=='function' || _vpSrcConsidered(p.src))){ const t=+p.when; if(t<min)min=t; if(t>max)max=t; } });
   if(min===Infinity) return null;
@@ -7280,6 +7295,8 @@ function detectFileKind(wb){
       if(hset.has('cpf') && hset.has('data_evento') && hset.has('ip')) return 'govbr';
       // OCR/LPR — CSV de passagens (placa + latitude + longitude + localização)
       if(hdr.some(h=>h.includes('placa')) && hdr.some(h=>h.includes('latitude')) && hdr.some(h=>h.includes('longitude'))) return 'alerta_veiculo';
+      // SPOT — rastreador: coluna ÚNICA "Lat./long." (lat e long juntos) + "Eventos"/"Via". Sem placa.
+      if(hdr.some(h=>h.includes('lat')&&h.includes('long')) && (hdr.some(h=>h.includes('evento')) || hset.has('via'))) return 'spot';
     }
   }catch(e){}
   // 1) Cellebrite — aba "Torres de célula"
@@ -7329,7 +7346,7 @@ function loadAny(file, hint){
       const wb = repairWorkbookRanges(XLSX.read(e.target.result, {type:'array', cellDates:true}));
       const kind = detectFileKind(wb);
       if(hint && hint!==kind){
-        const labels = {starlink:'Starlink', cellebrite:'Cellebrite', iped:'IPED', extrato:'Extrato de operadora', alerta_veiculo:'Placas (câmera/OCR)', generic_placa:'Placas (genérico)', generic_ip:'IPs (genérico)', govbr:'Auditoria gov.br'};
+        const labels = {starlink:'Starlink', cellebrite:'Cellebrite', spot:'Rastreador SPOT', iped:'IPED', extrato:'Extrato de operadora', alerta_veiculo:'Placas (câmera/OCR)', generic_placa:'Placas (genérico)', generic_ip:'IPs (genérico)', govbr:'Auditoria gov.br'};
         console.log('[Auto-route] "'+file.name+'" detectado como '+(labels[kind]||kind)+' (estava no slot '+(labels[hint]||hint)+'). Processando no lugar correto.');
       }
       if(kind==='govbr') return processGovBrText(new TextDecoder('utf-8').decode(e.target.result), file.name);
@@ -7338,6 +7355,7 @@ function loadAny(file, hint){
       if(kind==='alerta_veiculo') return processAlertaBrasilWb(wb, file);
       if(kind==='iped') return processIpedWb(wb, file);
       if(kind==='cellebrite') return processCellebriteWb(wb, file);
+      if(kind==='spot') return processSpotWb(wb, file);
       if(kind==='extrato') return processExtratoWb(wb, file);
       if(kind==='pointlist') return processPointListWb(wb, file);
       return processStarlinkWb(wb, file);
@@ -8103,6 +8121,96 @@ function processCellebriteWb(wb, file){
   if(all.length) map.fitBounds(L.latLngBounds(all).pad(0.15));
 }
 function loadCellebrite(file){ loadAny(file, 'cellebrite'); }
+
+// ============ RASTREADOR SPOT (satélite/GPS) ============
+// Relatório SPOT = trilha de pontos datados de UM dispositivo (aeronave/embarcação/veículo).
+// Particularidades do formato (validadas em arquivo real):
+//   • "Lat./long." numa coluna ÚNICA, com VÍRGULA decimal e separadas por ", "
+//     (ex.: "-3,743070, -38,511260" → lat -3.743070 / lng -38.511260);
+//   • "Data" em DD/MM/YYYY HH:MM:SS (hora local — aplica o fuso do app, como os demais BR);
+//   • "Eventos" (Movimento iniciado/parado, Rastreio ilimitado…) e "Endereço" geocodificado.
+// Entra como GEOLOCALIZAÇÃO (trilha) → Itinerário, base provável, Handover aéreo (saltos = voo).
+const SPOT_COLOR = '#F97316';
+function parseSpotLatLng(s){
+  const m = String(s==null?'':s).match(/(-?\d+[.,]\d+)\s*[,;]\s*(-?\d+[.,]\d+)/);
+  if(!m) return null;
+  const lat = parseFloat(m[1].replace(',','.')), lng = parseFloat(m[2].replace(',','.'));
+  if(!isFinite(lat)||!isFinite(lng)) return null;
+  if(Math.abs(lat)>90||Math.abs(lng)>180||(lat===0&&lng===0)) return null;
+  return {lat, lng};
+}
+function parseSpotDateTime(s){
+  if(s instanceof Date) return isNaN(s)?null:s;
+  const m = String(s==null?'':s).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if(!m) return null;
+  const off = (typeof TZ_OFFSET!=='undefined'?TZ_OFFSET:-3);   // hora local → instante UTC (display reaplica o fuso)
+  const d = new Date(Date.UTC(+m[3], +m[2]-1, +m[1], +m[4], +m[5], +(m[6]||0)) - off*3600000);
+  return isNaN(+d)?null:d;
+}
+function parseSpot(wb){
+  const snSpot = wb.SheetNames.find(s=>nkey(s)==='spot');
+  const sheet = wb.Sheets[snSpot || wb.SheetNames[0]];
+  if(!sheet) return null;
+  const rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:null, raw:false});
+  if(!rows.length) return null;
+  const hdr = (rows[0]||[]).map(h=>nkey(h));
+  const find = keys => hdr.findIndex(h=> keys.some(k=> h.includes(k)));
+  const cLL=find(['latlong','lat']), cDt=find(['data']), cEv=find(['evento']), cAddr=find(['endereco']);
+  if(cLL<0 || cDt<0) return null;
+  const pts=[];
+  rows.slice(1).forEach(r=>{
+    if(!r) return;
+    const ll = parseSpotLatLng(r[cLL]); if(!ll) return;
+    const when = parseSpotDateTime(r[cDt]); if(!when) return;
+    pts.push({ when, lat:ll.lat, lng:ll.lng, cgi:'',
+      tipo:(cEv>=0?String(r[cEv]||'').trim():''),
+      origem:(cAddr>=0?String(r[cAddr]||'').trim():''), etiqueta:'', pacote:'' });
+  });
+  return pts;
+}
+function buildSpotDataset(name, wb){
+  const raw = parseSpot(wb);
+  if(!raw || !raw.length) return null;
+  raw.sort((a,b)=>a.when-b.when);
+  const points=[]; let total_km=0, prev=null;
+  raw.forEach((r,i)=>{
+    const p={ idx:i+1, when:r.when, when_str:'', lat:r.lat, lng:r.lng, radius_km:0,
+      cell_id:'', resolution:r.tipo, ut_id:'SPOT', tipo:r.tipo, origem:r.origem, etiqueta:r.etiqueta, pacote:'',
+      hop_km:0, dist_to_reg_km:null, selected:false };
+    if(prev){ const d=hav(prev.lat,prev.lng,p.lat,p.lng); p.hop_km=+d.toFixed(2); total_km+=d; }
+    points.push(p); prev=p;
+  });
+  const cnt={}; points.forEach(p=>{ const k=p.lat.toFixed(3)+','+p.lng.toFixed(3); cnt[k]=(cnt[k]||0)+1; });
+  let bestK=null,bestC=0; for(const k in cnt){ if(cnt[k]>bestC){bestC=cnt[k];bestK=k;} }
+  const [blat,blng]= bestK?bestK.split(',').map(Number):[null,null];
+  let bigHopIdx=-1,bigHopKm=0; points.forEach((p,i)=>{ if(i>0&&p.hop_km>bigHopKm){bigHopKm=p.hop_km;bigHopIdx=i;} });
+  const stats={ total_points:points.length, total_km:+total_km.toFixed(1), biggest_hop_idx:bigHopIdx, biggest_hop_km:bigHopKm,
+    prob_base:{lat:blat,lng:blng,count:bestC}, ut_id:'SPOT', period_start:'', period_end:'', biggest_hop:null, missing_list:[], missing_count:0 };
+  const ds={ id:nextId++, name, seq:nextSeqByKind('cellebrite'), color:SPOT_COLOR, source:'cellebrite', subtype:'spot',
+    visible:true, has_time:true, points, stats, layers:makeDsLayers(), markersArr:[],circlesArr:[],labelsArr:[],
+    heat:null, osrmRoute:null, filterFrom:0, filterTo:points.length-1 };
+  recomputeDisplays(ds);
+  return ds;
+}
+function processSpotWb(wb, file){
+  const ds = buildSpotDataset(file.name, wb);
+  if(!ds || !ds.points.length){ alert('Não consegui interpretar "'+file.name+'" como relatório SPOT.\n\nEsperado: colunas "Eventos", "Data" e "Lat./long." (latitude e longitude juntas na mesma célula).'); return; }
+  buildDatasetLayers(ds);
+  DATASETS.push(ds);
+  if(activeId===null) activeId = ds.id;
+  if(REG){ ds.points.forEach(p=>{ p.dist_to_reg_km = +hav(REG.lat,REG.lng,p.lat,p.lng).toFixed(2); }); buildDatasetLayers(ds); }
+  if(typeof renderDatasetList==='function') renderDatasetList();
+  updateFileInfo();
+  document.getElementById('after-load').classList.remove('hidden');
+  document.getElementById('welcome').classList.add('hidden');
+  const dEl1=document.getElementById('details-load'); if(dEl1) dEl1.open=false;
+  const _dl1=document.getElementById('details-loaded'); if(_dl1) _dl1.open=true;
+  renderActive();
+  autoSave();
+  const all = ds.points.map(p=>[p.lat,p.lng]); if(REG) all.push([REG.lat,REG.lng]);
+  if(all.length) map.fitBounds(L.latLngBounds(all).pad(0.15));
+  console.log('[SPOT] "'+file.name+'": '+ds.points.length+' ponto(s) · '+ds.stats.total_km+' km · maior salto '+ds.stats.biggest_hop_km+' km.');
+}
 
 // ============ GEO IPED (CSV — "tipo Cellebrite") ============
 // O IPED exporta TIMESTAMP em ISO-8601 (UTC, sufixo "Z"). Pode trazer vários
